@@ -6,15 +6,15 @@ import itertools
 from matplotlib import pyplot as plt
 
 class ConvolutionalEncoder(tf.keras.Model):
-    def __init__(self, params):
+    def __init__(self):
         super(ConvolutionalEncoder, self).__init__(name = "ConvolutionalEncoder")
-        self.model = self.build_encoder(params)
+        self.model = self.build_encoder()
 
-    def build_encoder(self, params):
+    def build_encoder(self):
         model = tf.keras.models.Sequential()
         model.add(tf.keras.layers.InputLayer(
-            input_shape = params['input_shape'],
-            batch_size = params['batch_size']))
+            input_shape = (64000, 1),
+            batch_size = 10))
         model.add(tf.keras.layers.Conv1D(
             filters = 4096,
             kernel_size = 1024,
@@ -34,7 +34,7 @@ class ConvolutionalEncoder(tf.keras.Model):
             padding = 'SAME'))
         model.add(tf.keras.layers.Activation('relu'))
         model.add(tf.keras.layers.Conv1D(
-            filters = params['embedding_dim'],
+            filters = 128,
             kernel_size = 1,
             strides = 1,
             padding = 'SAME'))
@@ -44,14 +44,14 @@ class ConvolutionalEncoder(tf.keras.Model):
         return self.model(x)
 
 class ConvolutionalDecoder(tf.keras.Model):
-    def __init__(self, params):
+    def __init__(self):
         super(ConvolutionalDecoder, self).__init__(name = "ConvolutionalDecoder")
-        self.model = self.build_decoder(params)
+        self.model = self.build_decoder()
 
-    def build_decoder(self, params):
+    def build_decoder(self):
         model = tf.keras.models.Sequential()
         model.add(tf.keras.layers.InputLayer(
-            input_shape = params['input_shape']))
+            input_shape = (250, 128)))
         model.add(tf.keras.layers.Conv1D(
             filters = 4096,
             kernel_size = 9,
@@ -88,15 +88,15 @@ class ConvolutionalDecoder(tf.keras.Model):
 
 
 class ConvolutionalAutoencoder(tf.keras.Model):
-    def __init__(self, params):
-        super(ConvolutionalAutoencoder, self).__init__(params)
-        self.max_steps = params['max_steps']
-        self.learning_rate = params['learning_rate']
-        self.epochs = params['epochs']
+    def __init__(self):
+        super(ConvolutionalAutoencoder, self).__init__()
+        self.max_steps = 100
+        self.learning_rate = 0.0001
+        self.epochs = 10
         print('Building Encoder ..')
-        self.inference_net = ConvolutionalEncoder(params['encoder'])
+        self.inference_net = ConvolutionalEncoder()
         print('Building Decoder ..')
-        self.generative_net = ConvolutionalDecoder(params['decoder'])
+        self.generative_net = ConvolutionalDecoder()
 
     def encode(self, x):
         return self.inference_net(x)
@@ -134,27 +134,5 @@ class ConvolutionalAutoencoder(tf.keras.Model):
             print('---------- EPOCH ' + str(i) + ' END --------------')
 
 
-    def call(self, params):
+    def call(self):
       print('Hello world')
-
-params = {
-    'max_steps': 100,
-    'epochs': 10,
-    'learning_rate': 0.0001,
-    'encoder': {
-        'input_shape': (64000, 1),
-        'batch_size': 10,
-        'embedding_dim': 128
-    },
-    'decoder': {
-        'input_shape': (250, 128)
-    }
-}
-
-cae = ConvolutionalAutoencoder(params)
-print(cae.summary())
-print(cae.inference_net.summary())
-print(cae.generative_net.summary())
-
-dataset_path = ''
-cae.train(dataset_path)
