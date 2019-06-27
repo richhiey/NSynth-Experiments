@@ -122,15 +122,16 @@ class ConvolutionalAutoencoder(tf.keras.Model):
 
         loss = compute_loss(waveform, decoding)
         optimizer.minimize(loss)
-        return loss
+        return decoding, loss
 
     def train(self, dataset_path):
         dataset = tf.data.TFRecordDataset(dataset_path)
         for i in range(self.epochs):
             print('---------- EPOCH ' + str(i) + ' --------------')
-            for waveform in dataset:
-                print(waveform)
-                self.train_step(waveform)
+            for j, waveform in enumerate(dataset):
+                output_wav, loss = self.train_step(waveform)
+                if j % 100 == 0:
+                    generate_audio_sample(output_wav)
             print('---------- EPOCH ' + str(i) + ' END --------------')
 
 
