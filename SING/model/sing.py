@@ -1,6 +1,7 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import tensorflow as tf
 import numpy as np
-import os
 from conv_ae import ConvolutionalEncoder, ConvolutionalDecoder
 from sequence_encoder import SequenceEncoder
 
@@ -42,14 +43,12 @@ class SINGModel(tf.keras.Model):
     # - Done
     #
     ########################################################3
-    def train(self, dataset_path):
+    def train(self, dataset):
         train_loss_results = []
         train_accuracy_results = []
 
-        nsynth_train_dataset = tf.data.TFRecordDataset(dataset_path)
-        nsynth_train_dataset = prepare_nsynth_dataset(nsynth_train_dataset)
         num_epochs = 100
-        optimizer = tf.keras.optimizer.Adam()
+        optimizer = tf.keras.optimizers.Adam()
 
         def train_step_conv_autoencoder(x, y, loss_type = 'mse'):
             wav = tf.expand_dims(y, axis=-1)

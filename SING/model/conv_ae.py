@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"  
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import tensorflow as tf
 import numpy as np
 import itertools
@@ -9,12 +9,12 @@ class ConvolutionalEncoder(tf.keras.Model):
     def __init__(self):
         super(ConvolutionalEncoder, self).__init__(name = "ConvolutionalEncoder")
         self.model = self.build_encoder()
+        print(self.model.summary())
 
     def build_encoder(self):
         model = tf.keras.models.Sequential()
         model.add(tf.keras.layers.InputLayer(
-            input_shape = (64000, 1),
-            batch_size = 10))
+            input_shape = (64000, 1)))
         model.add(tf.keras.layers.Conv1D(
             filters = 4096,
             kernel_size = 1024,
@@ -47,6 +47,7 @@ class ConvolutionalDecoder(tf.keras.Model):
     def __init__(self):
         super(ConvolutionalDecoder, self).__init__(name = "ConvolutionalDecoder")
         self.model = self.build_decoder()
+        print(self.model.summary())
 
     def build_decoder(self):
         model = tf.keras.models.Sequential()
@@ -109,27 +110,25 @@ class ConvolutionalAutoencoder(tf.keras.Model):
         return logits
 
 
-    def train_step(self, waveform, loss_type):
-        optimizer = tf.keras.optimizer.Adam()
+    def train_step(self, waveform, loss_type = 'MSE'):
+        optimizer = tf.keras.optimizers.Adam()
         
+        encoding = self.inference_net(waveform)
+        decoding = self.generative_net(encoding)
         if loss_type == 'MSE':
-            compute_loss = tf.keras.losses.MSE()
+            loss = tf.keras.losses.MSE()(waveform, decoding)
         else:
             # Op to calculate spectral loss between two waveformss
             print('TODO - spectral_loss')
-        encoding = self.inference_net(waveform)
-        decoding = self.generative_net(encoding)
 
-        loss = compute_loss(waveform, decoding)
         optimizer.minimize(loss)
         return decoding, loss
 
-    def train(self, dataset_path):
-        dataset = tf.data.TFRecordDataset(dataset_path)
+    def train(self, dataset):
         for i in range(self.epochs):
             print('---------- EPOCH ' + str(i) + ' --------------')
-            for j, waveform in enumerate(dataset):
-                output_wav, loss = self.train_step(waveform)
+            for j, data in enumerate(dataset):
+                output_wav, loss = self.train_step(tf.expand_dims(tf.transpose(data['outputs'], perm = [1,0]), axis = -1))
                 if j % 100 == 0:
                     generate_audio_sample(output_wav)
             print('---------- EPOCH ' + str(i) + ' END --------------')
