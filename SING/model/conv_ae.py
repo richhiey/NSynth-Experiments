@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import itertools
 from matplotlib import pyplot as plt
+import IPython
 
 class ConvolutionalEncoder(tf.keras.Model):
     def __init__(self):
@@ -91,9 +92,8 @@ class ConvolutionalDecoder(tf.keras.Model):
 class ConvolutionalAutoencoder(tf.keras.Model):
     def __init__(self):
         super(ConvolutionalAutoencoder, self).__init__()
-        self.max_steps = 100
-        self.learning_rate = 0.0001
-        self.epochs = 10
+        self.learning_rate = 0.0003
+        self.epochs = 50
         print('Building Encoder ..')
         self.inference_net = ConvolutionalEncoder()
         print('Building Decoder ..')
@@ -110,27 +110,44 @@ class ConvolutionalAutoencoder(tf.keras.Model):
         return logits
 
 
-    def train_step(self, waveform, loss_type = 'MSE'):
-        optimizer = tf.keras.optimizers.Adam()
-        
-        encoding = self.inference_net(waveform)
-        decoding = self.generative_net(encoding)
-        if loss_type == 'MSE':
-            loss = tf.keras.losses.MSE()(waveform, decoding)
-        else:
-            # Op to calculate spectral loss between two waveformss
-            print('TODO - spectral_loss')
-
-        optimizer.minimize(loss)
-        return decoding, loss
+    def train_step(self, waveform, loss_type = 'MSE'):        
+        with tf.GradientTape() as tape:
+            encoding = self.inference_net(waveform)
+            decoding = self.generative_net(encoding)
+            target_wav = tf.squeeze(waveform, axis=2)
+            if loss_type == 'MSE':
+                loss = tf.keras.losses.MSE(target_wav, decoding)
+            else:
+                print('TODO - spectral_loss')
+        grads = tape.gradient(loss, self.trainable_variables)
+        grads_and_vars = zip(grads, self.trainable_variables)
+        return decoding, loss, grads_and_vars
 
     def train(self, dataset):
+        optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
+        model_checkpoint_dir = 'model_logs/'
+        ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = optimizer, net = self)
+        manager = tf.train.CheckpointManager(ckpt, model_checkpoint_dir, max_to_keep=3)
+        ckpt.restore(manager.latest_checkpoint)
+        if manager.latest_checkpoint:
+            print("Restored from {}".format(manager.latest_checkpoint))
+        else:
+            print("Initializing model from scratch.")
         for i in range(self.epochs):
             print('---------- EPOCH ' + str(i) + ' --------------')
-            for j, data in enumerate(dataset):
-                output_wav, loss = self.train_step(tf.expand_dims(tf.transpose(data['outputs'], perm = [1,0]), axis = -1))
-                if j % 100 == 0:
-                    generate_audio_sample(output_wav)
+            for data in dataset:
+                output_wav, loss, grads = self.train_step(tf.expand_dims(data['outputs'], axis=-1))
+                optimizer.apply_gradients(grads)
+                tf.summary.scalar('Conv_AE_Loss', tf.reduce_sum(loss), step=int(ckpt.step))
+                print(tf.reduce_sum(loss))
+                if int(ckpt.step) % 1000 == 0:
+                    print('Generating audio ...')
+                    num_samples = 10
+                    for j in range(num_samples):
+                        IPython.display.display(IPython.display.Audio(output_wav[i,:], rate=16000))
+                    save_path = manager.save()
+                    print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
+                ckpt.step.assign_add(1)
             print('---------- EPOCH ' + str(i) + ' END --------------')
 
 

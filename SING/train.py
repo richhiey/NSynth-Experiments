@@ -48,7 +48,7 @@ def prepare_nsynth_dataset(dataset):
     return tfr_dataset_eager(dataset, 1)
 
 def run_training(params):
-	dataset = tf.data.TFRecordDataset('data/NSynth/nsynth-dev.tfrecord')
+	dataset = tf.data.TFRecordDataset('/data/NSynth/nsynth-train.tfrecord')
 	nsynth_dev = prepare_nsynth_dataset(dataset)
 
 	conv_ae = ConvolutionalAutoencoder()
