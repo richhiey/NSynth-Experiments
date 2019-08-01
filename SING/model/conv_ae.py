@@ -139,12 +139,13 @@ class ConvolutionalAutoencoder(tf.keras.Model):
                 output_wav, loss, grads = self.train_step(tf.expand_dims(data['outputs'], axis=-1))
                 optimizer.apply_gradients(grads)
                 tf.summary.scalar('Conv_AE_Loss', tf.reduce_sum(loss), step=int(ckpt.step))
-                print(tf.reduce_sum(loss))
+                if int(ckpt.step) % 100 == 0:
+                    print(tf.reduce_sum(loss))
                 if int(ckpt.step) % 1000 == 0:
                     print('Generating audio ...')
-                    num_samples = 10
+                    num_samples = 5
                     for j in range(num_samples):
-                        IPython.display.display(IPython.display.Audio(output_wav[i,:], rate=16000))
+                        IPython.display.display(IPython.display.Audio(output_wav[i*i,:], rate=16000))
                     save_path = manager.save()
                     print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
                 ckpt.step.assign_add(1)

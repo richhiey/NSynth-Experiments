@@ -16,7 +16,7 @@ class SINGModel(tf.keras.Model):
         self.conv_decoder.build(input_shape=(10,250,128))
         print(self.conv_decoder.summary())
         self.sequence_generator = SequenceEncoder()
-        self.sequence_generator.build(input_shape=(10,250,30))
+        self.sequence_generator.build(input_shape=(10,250,1262))
         print(self.sequence_generator.summary())
 
     def call(self):
@@ -45,16 +45,16 @@ class SINGModel(tf.keras.Model):
     #
     ########################################################3
     def train(self, nsynth_train_dataset):
-        num_epochs = 100
+        num_epochs = 50
         optimizer = tf.keras.optimizers.Adam()
-#         model_checkpoint_dir = 'model_logs_conv_ae/'
-#         ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = optimizer, net = self.conv_encoder])
-#         manager = tf.train.CheckpointManager(ckpt, model_checkpoint_dir, max_to_keep=3)
-#         ckpt.restore(manager.latest_checkpoint)
-#         if manager.latest_checkpoint:
-#             print("Restored from {}".format(manager.latest_checkpoint))
-#         else:
-#             print("Initializing model from scratch.")
+        model_checkpoint_dir = 'model_logs_conv_ae/'
+        ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = optimizer, net = self)
+        manager = tf.train.CheckpointManager(ckpt, model_checkpoint_dir, max_to_keep=3)
+        ckpt.restore(manager.latest_checkpoint)
+        if manager.latest_checkpoint:
+            print("Restored from {}".format(manager.latest_checkpoint))
+        else:
+            print("Initializing model from scratch.")
 
         def train_step_conv_autoencoder(waveform, optimizer, loss_type = 'MSE'):        
             with tf.GradientTape() as tape:
@@ -65,61 +65,87 @@ class SINGModel(tf.keras.Model):
                     loss = tf.keras.losses.MSE(target_wav, decoding)
                 else:
                     print('TODO - spectral_loss')
-                grads = tape.gradient(loss, [self.conv_encoder.trainable_variables])
-                grads_and_vars = zip(grads, [self.conv_encoder.trainable_variables])
-            optimizer.apply_gradients(grads_and_vars)
-            return decoding, loss, grads_and_vars
-
-        def train_step_sing(waveform, optimizer, loss_type = 'MSE'):        
-            with tf.GradientTape() as tape:
-                encoding = self.inference_net(waveform)
-                decoding = self.generative_net(encoding)
-                target_wav = tf.squeeze(waveform, axis=2)
-                if loss_type == 'MSE':
-                    loss = tf.keras.losses.MSE(target_wav, decoding)
-                else:
-                    print('TODO - spectral_loss')
-                grads = tape.gradient(loss, [self.inference_net.trainable_variables])
-                grads_and_vars = zip(grads, [self.inference_net.trainable_variables])
-            print(grads_and_vars)
+            trainable_variables = [self.conv_encoder.trainable_variables, self.conv_decoder.trainable_variables]
+            flat_list = []
+            for sublist in trainable_variables:
+                for item in sublist:
+                    flat_list.append(item)
+            trainable_variables = flat_list
+            grads = tape.gradient(loss, trainable_variables)
+            grads_and_vars = zip(grads, trainable_variables)
             optimizer.apply_gradients(grads_and_vars)
             return decoding, loss
 
-        # PreTraining Conv Autoencoder
+        def train_step_sing(data, optimizer, loss_type = 'MSE'):        
+            inputs = data['inputs']
+            waveform = data['outputs']
+            with tf.GradientTape() as tape:
+                encoding = self.sequence_generator(inputs)
+                decoding = self.conv_decoder(encoding)
+                if loss_type == 'MSE':
+                    loss = tf.keras.losses.MSE(waveform, decoding)
+                else:
+                    print('TODO - spectral_loss')
+                trainable_variables = [self.sequence_generator.trainable_variables, self.conv_decoder.trainable_variables]
+                flat_list = []
+                for sublist in trainable_variables:
+                    for item in sublist:
+                        flat_list.append(item)
+                trainable_variables = flat_list
+                grads = tape.gradient(loss, trainable_variables)
+                grads_and_vars = zip(grads, trainable_variables)
+            optimizer.apply_gradients(grads_and_vars)
+            return decoding, loss
+
+#         # PreTraining Conv Autoencoder
+        print('Initializing pretraining of Convolutional Autoencoder ...')
         for i in range(num_epochs):
             print('---------- EPOCH ' + str(i) + ' --------------')
             for data in nsynth_train_dataset:
                 output_wav, loss = train_step_conv_autoencoder(tf.expand_dims(data['outputs'], axis=-1), optimizer)
-                if int(ckpt.step) % 100 == 0:
+                ckpt.step.assign_add(1)
+                if int(ckpt.step) % 1000 == 0:
                     print('Generating audio ...')
-                    print(loss)
-                    IPython.display.display(IPython.display.Audio(output_wav, rate=16000))
-                    
-#                 if int(ckpt.step) % 1000 == 0:
-#                     save_path = manager.save()
-#                     print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
+                    num_samples = 2
+                    for j in range(num_samples):
+                        print('----- Original waveform -----')
+                        IPython.display.display(IPython.display.Audio(data['outputs'][i*i,:], rate=16000))
+                        print('----- Ouput waveform -----')
+                        IPython.display.display(IPython.display.Audio(output_wav[i*i,:], rate=16000))
+                    save_path = manager.save()
+                    print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
+                if int(ckpt.step) % 100 == 0:
+                    print(tf.reduce_sum(loss))
             print('---------- EPOCH ' + str(i) + ' END --------------')
+        print('Pretraining of Convolutional Autoencoder done!')
 
         # Training SING Model
-#         model_checkpoint_dir = 'model_logs_sing/'
-#         optimizer = tf.keras.optimizers.Adam()
-#         ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = optimizer, net = [self.conv_encoder, self.conv_decoder])
-#         manager = tf.train.CheckpointManager(ckpt, model_checkpoint_dir, max_to_keep=3)
-#         ckpt.restore(manager.latest_checkpoint)
+        print('Initializing training of SING Model with LSTM sequence generator ...')
+        model_checkpoint_dir = 'model_logs_sing/'
+        optimizer = tf.keras.optimizers.Adam()
+        ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = optimizer, net = self)
+        manager = tf.train.CheckpointManager(ckpt, model_checkpoint_dir, max_to_keep=3)
+        ckpt.restore(manager.latest_checkpoint)
         for i in range(num_epochs):
             print('---------- EPOCH ' + str(i) + ' --------------')
             for data in nsynth_train_dataset:
-                output_wav, loss = train_step_sing(tf.expand_dims(data['outputs'], axis=-1), optimizer)
+                output_wav, loss = train_step_sing(data, optimizer)
                 ckpt.step.assign_add(1)
-                if int(ckpt.step) % 100 == 0:
+                if int(ckpt.step) % 1000 == 0:
                     print('Generating audio ...')
-                    print(loss)
-                    IPython.display.display(IPython.display.Audio(output_wav, rate=16000))
-                    
-#                 if int(ckpt.step) % 1000 == 0:
-#                     save_path = manager.save()
-#                     print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
+                    num_samples = 2
+                    for j in range(num_samples):
+                        print('----- Inputs -----')
+                        print(data['inputs'])
+                        print('----- Ouput waveform -----')
+                        IPython.display.display(IPython.display.Audio(output_wav[i*i,:], rate=16000))
+                        save_path = manager.save()
+                        print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
+ 
+                if int(ckpt.step) % 100 == 0:
+                    print(tf.reduce_sum(loss))
             print('---------- EPOCH ' + str(i) + ' END --------------')
+        print('Training of SING Model done!')
 
     def sample(self):
         pass
