@@ -1,16 +1,13 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import tensorflow as tf
 import numpy as np
 import itertools
-from matplotlib import pyplot as plt
-import IPython
+import utils
 
 class ConvolutionalEncoder(tf.keras.Model):
     def __init__(self):
         super(ConvolutionalEncoder, self).__init__(name = "ConvolutionalEncoder")
         self.model = self.build_encoder()
-        print(self.model.summary())
 
     def build_encoder(self):
         model = tf.keras.models.Sequential()
@@ -48,7 +45,6 @@ class ConvolutionalDecoder(tf.keras.Model):
     def __init__(self):
         super(ConvolutionalDecoder, self).__init__(name = "ConvolutionalDecoder")
         self.model = self.build_decoder()
-        print(self.model.summary())
 
     def build_decoder(self):
         model = tf.keras.models.Sequential()
@@ -88,16 +84,27 @@ class ConvolutionalDecoder(tf.keras.Model):
     def call(self, x):
         return self.model(x)
 
-
 class ConvolutionalAutoencoder(tf.keras.Model):
     def __init__(self):
         super(ConvolutionalAutoencoder, self).__init__()
+        # Extra variables
         self.learning_rate = 0.0003
         self.epochs = 50
-        print('Building Encoder ..')
+        self.model_log_dir = 'model_logs_conv_ae/'
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
+        self.num_steps_checkpoint = 1000
+        self.num_outputs = 5
+        self.sampling_rate = 16000
+        
+        # Model variables
+        print('Building Convolutional Encoder ..')
         self.inference_net = ConvolutionalEncoder()
-        print('Building Decoder ..')
+        print('Building Convolutional Decoder ..')
         self.generative_net = ConvolutionalDecoder()
+        print('Built Convolutional Autoencoder!')
+
+    def call(self, inputs):
+      return self.generative_net(self.inference_net(inputs))
 
     def encode(self, x):
         return self.inference_net(x)
@@ -108,7 +115,6 @@ class ConvolutionalAutoencoder(tf.keras.Model):
             probs = tf.sigmoid(logits)
             return probs
         return logits
-
 
     def train_step(self, waveform, loss_type = 'MSE'):        
         with tf.GradientTape() as tape:
@@ -124,33 +130,34 @@ class ConvolutionalAutoencoder(tf.keras.Model):
         return decoding, loss, grads_and_vars
 
     def train(self, dataset):
-        optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
-        model_checkpoint_dir = 'model_logs/'
-        ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = optimizer, net = self)
-        manager = tf.train.CheckpointManager(ckpt, model_checkpoint_dir, max_to_keep=3)
-        ckpt.restore(manager.latest_checkpoint)
-        if manager.latest_checkpoint:
-            print("Restored from {}".format(manager.latest_checkpoint))
-        else:
-            print("Initializing model from scratch.")
+        ckpt, manager = utils.processing.get_tensorflow_checkpoint(
+            self.optimizer,
+            self.model_log_dir
+        )
         for i in range(self.epochs):
-            print('---------- EPOCH ' + str(i) + ' --------------')
+            print('-------------------- EPOCH ' + str(i) + ' ------------------------')
             for data in dataset:
                 output_wav, loss, grads = self.train_step(tf.expand_dims(data['outputs'], axis=-1))
-                optimizer.apply_gradients(grads)
-                tf.summary.scalar('Conv_AE_Loss', tf.reduce_sum(loss), step=int(ckpt.step))
-                if int(ckpt.step) % 100 == 0:
-                    print(tf.reduce_sum(loss))
-                if int(ckpt.step) % 1000 == 0:
-                    print('Generating audio ...')
-                    num_samples = 5
-                    for j in range(num_samples):
-                        IPython.display.display(IPython.display.Audio(output_wav[i*i,:], rate=16000))
+                self.optimizer.apply_gradients(grads)
+                step = int(ckpt.step)
+                utils.tensorboard.log_stuff_to_tensorboard(
+                    step,
+                    tf.reduce_sum(loss),
+                    grads
+                )
+                if step % self.num_steps_checkpoint == 0:
+                    print("============== STEP " + str(step) + " ==============")
+                    utils.processing.log_statistics_to_console(
+                        tf.reduce_sum(loss)
+                    )
+                    utils.processing.log_outputs_to_notebook(
+                        data['outputs'],
+                        output_wav,
+                        num_outputs = self.num_outputs,
+                        audio_sampling_rate = self.sampling_rate
+                    )
                     save_path = manager.save()
-                    print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
+                    print("Saved checkpoint for step {}: {}".format(step, save_path))
+                    print("============== STEP END ==============")
                 ckpt.step.assign_add(1)
-            print('---------- EPOCH ' + str(i) + ' END --------------')
-
-
-    def call(self):
-      print('Hello world')
+            print('-------------------- EPOCH ' + str(i) + ' END ------------------------')
