@@ -30,7 +30,7 @@ def get_all_trainable_variables(trainable_sub_models = []):
 			trainable_variables.append(var)
 	return trainable_variables
 
-def log_outputs_to_notebook(real_wav, generated_wav, num_outputs = 1, audio_sampling_rate = 16000)
+def log_training_audio_to_notebook(real_wav, generated_wav, num_outputs = 1, audio_sampling_rate = 16000)
 	print('------------- Generating audio ---------------')
 	print('Original audio waveforms - ')
 	for j in range(num_samples):

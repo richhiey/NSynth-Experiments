@@ -148,9 +148,9 @@ class ConvolutionalAutoencoder(tf.keras.Model):
                 if step % self.num_steps_checkpoint == 0:
                     print("============== STEP " + str(step) + " ==============")
                     utils.processing.log_statistics_to_console(
-                        tf.reduce_sum(loss)
+                        tf.reduce_sum(losslog_training_audio_to_notebook)
                     )
-                    utils.processing.log_outputs_to_notebook(
+                    utils.processing.log_training_audio_to_notebook(
                         data['outputs'],
                         output_wav,
                         num_outputs = self.num_outputs,

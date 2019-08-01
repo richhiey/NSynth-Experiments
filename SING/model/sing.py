@@ -104,7 +104,7 @@ class SINGModel(tf.keras.Model):
                     utils.processing.log_statistics_to_console(
                         tf.reduce_sum(loss)
                     )
-                    utils.processing.log_outputs_to_notebook(
+                    utils.processing.log_training_audio_to_notebook(
                         data['outputs'],
                         output_wav,
                         num_outputs = self.num_outputs,
@@ -138,7 +138,7 @@ class SINGModel(tf.keras.Model):
                     utils.processing.log_statistics_to_console(
                         tf.reduce_sum(loss)
                     )
-                    utils.processing.log_outputs_to_notebook(
+                    utils.processing.log_training_audio_to_notebook(
                         data['outputs'],
                         output_wav,
                         num_outputs = self.num_outputs,
