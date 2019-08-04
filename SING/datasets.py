@@ -60,4 +60,4 @@ def prepare_nsynth_dataset(dataset, time_embeddings = True):
         #data = data.prefetch(1)
         return data
 
-    return tfr_dataset_eager(dataset, 128)
+    return tfr_dataset_eager(dataset, 64)

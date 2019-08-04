@@ -2,7 +2,9 @@ import os
 import tensorflow as tf
 import numpy as np
 import itertools
-import utils
+from .processing import *
+from .losses import *
+from .tensorboard import *
 
 class ConvolutionalEncoder(tf.keras.Model):
     def __init__(self):
@@ -89,11 +91,11 @@ class ConvolutionalAutoencoder(tf.keras.Model):
         super(ConvolutionalAutoencoder, self).__init__()
         # Extra variables
         self.learning_rate = 0.0003
-        self.epochs = 50
+        self.epochs = 25
         self.model_log_dir = 'model_logs_conv_ae/'
         self.optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
         self.num_steps_checkpoint = 1000
-        self.num_outputs = 5
+        self.num_outputs = 3
         self.sampling_rate = 16000
         
         # Model variables
@@ -104,7 +106,7 @@ class ConvolutionalAutoencoder(tf.keras.Model):
         print('Built Convolutional Autoencoder!')
 
     def call(self, inputs):
-      return self.generative_net(self.inference_net(inputs))
+        return self.generative_net(self.inference_net(inputs))
 
     def encode(self, x):
         return self.inference_net(x)
@@ -127,10 +129,13 @@ class ConvolutionalAutoencoder(tf.keras.Model):
                 print('TODO - spectral_loss')
         grads = tape.gradient(loss, self.trainable_variables)
         grads_and_vars = zip(grads, self.trainable_variables)
-        return decoding, loss, grads_and_vars
+        self.optimizer.apply_gradients(grads_and_vars)
+        return decoding, loss, grads
 
     def train(self, dataset):
-        ckpt, manager = utils.processing.get_tensorflow_checkpoint(
+        ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.optimizer, net = self)
+        manager = get_tensorflow_checkpoint(
+            ckpt,
             self.optimizer,
             self.model_log_dir
         )
@@ -138,19 +143,18 @@ class ConvolutionalAutoencoder(tf.keras.Model):
             print('-------------------- EPOCH ' + str(i) + ' ------------------------')
             for data in dataset:
                 output_wav, loss, grads = self.train_step(tf.expand_dims(data['outputs'], axis=-1))
-                self.optimizer.apply_gradients(grads)
                 step = int(ckpt.step)
-                utils.tensorboard.log_stuff_to_tensorboard(
+                log_stuff_to_tensorboard(
                     step,
                     tf.reduce_sum(loss),
                     grads
                 )
                 if step % self.num_steps_checkpoint == 0:
                     print("============== STEP " + str(step) + " ==============")
-                    utils.processing.log_statistics_to_console(
-                        tf.reduce_sum(losslog_training_audio_to_notebook)
+                    log_statistics_to_console(
+                        tf.reduce_sum(loss)
                     )
-                    utils.processing.log_training_audio_to_notebook(
+                    log_training_audio_to_notebook(
                         data['outputs'],
                         output_wav,
                         num_outputs = self.num_outputs,

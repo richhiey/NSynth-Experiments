@@ -3,7 +3,9 @@ import tensorflow as tf
 import numpy as np
 from .conv_ae import ConvolutionalEncoder, ConvolutionalDecoder
 from .sequence_encoder import SequenceEncoder
-import utils
+from .processing import *
+from .losses import *
+from .tensorboard import *
 
 class SINGModel(tf.keras.Model):
     def __init__(self, params = {}):
@@ -21,12 +23,12 @@ class SINGModel(tf.keras.Model):
 
         # Extra variables
         self.learning_rate = 0.0003
-        self.epochs = 50
+        self.num_epochs = 25
         self.conv_ae_model_log_dir = 'model_logs_sing_conv_ae/'
         self.sing_model_log_dir = 'model_logs_sing'
         self.optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
-        self.num_steps_checkpoint = 1000
-        self.num_outputs = 5
+        self.num_steps_checkpoint = 1
+        self.num_outputs = 1
         self.sampling_rate = 16000
 
     def call(self, inputs):
@@ -54,15 +56,13 @@ class SINGModel(tf.keras.Model):
                 if loss_type == 'MSE':
                     loss = tf.keras.losses.MSE(target_wav, decoding)
                 else:
-                    loss = utils.losses.spectral_loss(data['outputs'], decoding)
+                    loss = spectral_loss(data['outputs'], decoding)
             trainable_sub_models = [self.conv_encoder, self.conv_decoder]
-            trainable_variables = utils.processing.get_all_trainable_variables(
-                trainable_sub_models
-            )
+            trainable_variables = get_all_trainable_variables(trainable_sub_models)
             grads = tape.gradient(loss, trainable_variables)
             grads_and_vars = zip(grads, trainable_variables)
             self.optimizer.apply_gradients(grads_and_vars)
-            return decoding, loss
+            return decoding, loss, grads
 
         def train_step_sing(data, loss_type = 'MSE'):
             with tf.GradientTape() as tape:
@@ -71,18 +71,18 @@ class SINGModel(tf.keras.Model):
                 if loss_type == 'MSE':
                     loss = tf.keras.losses.MSE(data['outputs'], decoding)
                 else:
-                    loss = utils.losses.spectral_loss(data['outputs'], decoding)
+                    loss = spectral_loss(data['outputs'], decoding)
                 trainable_sub_models = [self.sequence_generator, self.conv_decoder]
-                trainable_variables = utils.processing.get_all_trainable_variables(
-                    trainable_sub_models
-                )
+                trainable_variables = get_all_trainable_variables(trainable_sub_models)
                 grads = tape.gradient(loss, trainable_variables)
                 grads_and_vars = zip(grads, trainable_variables)
             self.optimizer.apply_gradients(grads_and_vars)
-            return decoding, loss
+            return decoding, loss, grads
 
         # PreTraining Conv Autoencoder
-        ckpt, manager = utils.processing.get_tensorflow_checkpoint(
+        ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.optimizer, net = self)
+        manager = get_tensorflow_checkpoint(
+            ckpt,
             self.optimizer,
             self.conv_ae_model_log_dir
         )
@@ -90,21 +90,21 @@ class SINGModel(tf.keras.Model):
         for i in range(self.num_epochs):
             print('-------------------- EPOCH ' + str(i) + ' ------------------------')
             for data in dataset:
-                output_wav, loss = train_step_conv_autoencoder(
+                output_wav, loss, grads = train_step_conv_autoencoder(
                     tf.expand_dims(data['outputs'], axis = -1)
                 )
                 step = int(ckpt.step)
-                utils.tensorboard.log_stuff_to_tensorboard(
+                log_stuff_to_tensorboard(
                     step,
                     tf.reduce_sum(loss),
                     grads
                 )
                 if step % self.num_steps_checkpoint == 0:
                     print("============== STEP " + str(step) + " ==============")
-                    utils.processing.log_statistics_to_console(
+                    log_statistics_to_console(
                         tf.reduce_sum(loss)
                     )
-                    utils.processing.log_training_audio_to_notebook(
+                    log_training_audio_to_notebook(
                         data['outputs'],
                         output_wav,
                         num_outputs = self.num_outputs,
@@ -119,26 +119,28 @@ class SINGModel(tf.keras.Model):
 
         # Training SING Model
         print('Initializing training of SING Model with LSTM sequence generator ...')
-        ckpt, manager = utils.processing.get_tensorflow_checkpoint(
+        ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.optimizer, net = self)
+        manager = get_tensorflow_checkpoint(
+            ckpt,
             self.optimizer,
             self.sing_model_log_dir
         )
         for i in range(self.num_epochs):
             print('-------------------- EPOCH ' + str(i) + ' ------------------------')
             for data in dataset:
-                output_wav, loss = train_step_sing(data)
+                output_wav, loss, grads = train_step_sing(data)
                 step = int(ckpt.step)
-                utils.tensorboard.log_stuff_to_tensorboard(
+                log_stuff_to_tensorboard(
                     step,
                     tf.reduce_sum(loss),
                     grads
                 )
                 if step % self.num_steps_checkpoint == 0:
                     print("============== STEP " + str(step) + " ==============")
-                    utils.processing.log_statistics_to_console(
+                    log_statistics_to_console(
                         tf.reduce_sum(loss)
                     )
-                    utils.processing.log_training_audio_to_notebook(
+                    log_training_audio_to_notebook(
                         data['outputs'],
                         output_wav,
                         num_outputs = self.num_outputs,

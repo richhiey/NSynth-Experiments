@@ -3,8 +3,7 @@ import tensorflow as tf
 import IPython
 from matplotlib import pyplot as plt
 
-def get_tensorflow_checkpoint(optimizer, model_checkpoint_dir, max_to_keep = 3):
-    ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = optimizer, net = self)
+def get_tensorflow_checkpoint(ckpt, optimizer, model_checkpoint_dir, max_to_keep = 3):
     manager = tf.train.CheckpointManager(
         ckpt,
         model_checkpoint_dir,
@@ -15,7 +14,7 @@ def get_tensorflow_checkpoint(optimizer, model_checkpoint_dir, max_to_keep = 3):
         print("Restored from {}".format(manager.latest_checkpoint))
     else:
         print("Initializing model from scratch.")
-    return ckpt, manager
+    return manager
 
 
 def log_statistics_to_console(loss):
@@ -30,22 +29,22 @@ def get_all_trainable_variables(trainable_sub_models = []):
             trainable_variables.append(var)
     return trainable_variables
 
-def log_training_audio_to_notebook(real_wav, generated_wav, num_outputs = 1, audio_sampling_rate = 16000)
+def log_training_audio_to_notebook(real_wav, generated_wav, num_outputs = 1, audio_sampling_rate = 16000):
     print('------------- Generating audio ---------------')
     print('Original audio waveforms - ')
-    for j in range(num_samples):
+    for j in range(num_outputs):
         IPython.display.display(
             IPython.display.Audio(
-                real_wav[i,:],
+                real_wav[j,:],
                 rate = audio_sampling_rate
             )
         )
 
     print('Generated audio waveforms -')
-    for j in range(num_samples):
+    for j in range(num_outputs):
         IPython.display.display(
             IPython.display.Audio(
-                generated_wav[i,:],
+                generated_wav[j,:],
                 rate = audio_sampling_rate
             )
         )
