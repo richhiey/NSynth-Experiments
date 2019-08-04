@@ -165,3 +165,4 @@ class ConvolutionalAutoencoder(tf.keras.Model):
                     print("============== STEP END ==============")
                 ckpt.step.assign_add(1)
             print('-------------------- EPOCH ' + str(i) + ' END ------------------------')
+        self.save('trained_models/conv_ae_model.h5')

@@ -79,43 +79,44 @@ class SINGModel(tf.keras.Model):
             self.optimizer.apply_gradients(grads_and_vars)
             return decoding, loss, grads
 
-        # PreTraining Conv Autoencoder
-        ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.optimizer, net = self)
-        manager = get_tensorflow_checkpoint(
-            ckpt,
-            self.optimizer,
-            self.conv_ae_model_log_dir
-        )
-        print('Initializing pretraining of Convolutional Autoencoder ...')
-        for i in range(self.num_epochs):
-            print('-------------------- EPOCH ' + str(i) + ' ------------------------')
-            for data in dataset:
-                output_wav, loss, grads = train_step_conv_autoencoder(
-                    tf.expand_dims(data['outputs'], axis = -1)
-                )
-                step = int(ckpt.step)
-                log_stuff_to_tensorboard(
-                    step,
-                    tf.reduce_sum(loss),
-                    grads
-                )
-                if step % self.num_steps_checkpoint == 0:
-                    print("============== STEP " + str(step) + " ==============")
-                    log_statistics_to_console(
-                        tf.reduce_sum(loss)
-                    )
-                    log_training_audio_to_notebook(
-                        data['outputs'],
-                        output_wav,
-                        num_outputs = self.num_outputs,
-                        audio_sampling_rate = self.sampling_rate
-                    )
-                    save_path = manager.save()
-                    print("Saved checkpoint for step {}: {}".format(step, save_path))
-                    print("============== STEP END ==============")
-                ckpt.step.assign_add(1)
-            print('-------------------- EPOCH ' + str(i) + ' END ------------------------')
-        print('Pretraining of Convolutional Autoencoder done!')
+#         # PreTraining Conv Autoencoder
+#         ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.optimizer, net = self)
+#         manager = get_tensorflow_checkpoint(
+#             ckpt,
+#             self.optimizer,
+#             self.conv_ae_model_log_dir
+#         )
+#         print('Initializing pretraining of Convolutional Autoencoder ...')
+#         for i in range(self.num_epochs):
+#             print('-------------------- EPOCH ' + str(i) + ' ------------------------')
+#             for data in dataset:
+#                 output_wav, loss, grads = train_step_conv_autoencoder(
+#                     tf.expand_dims(data['outputs'], axis = -1)
+#                 )
+#                 step = int(ckpt.step)
+#                 log_stuff_to_tensorboard(
+#                     step,
+#                     tf.reduce_sum(loss),
+#                     grads
+#                 )
+#                 if step % self.num_steps_checkpoint == 0:
+#                     print("============== STEP " + str(step) + " ==============")
+#                     log_statistics_to_console(
+#                         tf.reduce_sum(loss)
+#                     )
+#                     log_training_audio_to_notebook(
+#                         data['outputs'],
+#                         output_wav,
+#                         num_outputs = self.num_outputs,
+#                         audio_sampling_rate = self.sampling_rate
+#                     )
+#                     save_path = manager.save()
+#                     print("Saved checkpoint for step {}: {}".format(step, save_path))
+#                     print("============== STEP END ==============")
+#                 ckpt.step.assign_add(1)
+#             print('-------------------- EPOCH ' + str(i) + ' END ------------------------')
+        
+#         print('Pretraining of Convolutional Autoencoder done!')
 
         # Training SING Model
         print('Initializing training of SING Model with LSTM sequence generator ...')
@@ -151,4 +152,5 @@ class SINGModel(tf.keras.Model):
                     print("============== STEP END ==============")
                 ckpt.step.assign_add(1)
             print('-------------------- EPOCH ' + str(i) + ' END ------------------------')
+        self.save('trained_models/sing_model.h5')
         print('Training of SING Model done!')

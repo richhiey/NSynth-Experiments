@@ -49,4 +49,17 @@ def log_training_audio_to_notebook(real_wav, generated_wav, num_outputs = 1, aud
             )
         )
     print('--------------- Generated audio! ---------------')
-    print
+
+def get_spectrogram_for_audio(audio, log_scale, sampling_rate = 16000):
+    spec = librosa.feature.melspectrogram(tf.squeeze(audio, axis = 0).numpy(), sr = sampling_rate, n_mels = 128)
+    if log_scale:
+        spec = librosa.amplitude_to_db(S, np.max)
+    return spec
+
+def plot_spectrogram(spec, sampling_rate = 16000):
+    plt.figure(figsize=(12,4))
+    librosa.display.specshow(spec, sr = sampling_rate, x_axis = 'time', y_axis = 'mel')
+    plt.title('mel power spectrogram')
+    plt.colorbar(format = '%+02.0f dB')
+    plt.tight_layout()
+    plt.show()

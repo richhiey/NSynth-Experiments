@@ -23,17 +23,37 @@ class SequenceEncoder(tf.keras.Model):
 
         self.original_input_size = self.instr_dim_size + self.pitch_dim_size + self.vel_dim_size + self.time_dim_size 
         self.embedding_input_size = self.instr_embedding_size + self.pitch_embedding_size + self.vel_embedding_size + self.time_embedding_size
-        self.sequence_generator = self.build_encoder(params)
+        self.sequence_generator = self.build_encoder()
 
-    def build_encoder(self, params):
-        x = tf.keras.layers.Input(
-            shape = (250, 1262),
-            batch_size = 128)
-        lstm_1 = tf.keras.layers.LSTM(units = 1024, return_sequences = True)(x)
+    def build_encoder(self, use_embed = True, use_time_embed = True):
+        instrument = tf.keras.Input(())
+        pitch = tf.keras.Input(())
+        velocity = tf.keras.Input(())
+        
+        if use_embed:
+            instrument_embed = tf.keras.layers.Embedding(1006, 128)(instrument)
+            pitch_embed = tf.keras.layers.Embedding(128, 16)(pitch)
+            velocity_embed = tf.keras.layers.Embedding(128, 2)(velocity)
+
+        inputs = tf.keras.layers.concatenate([pitch_embed, instrument_embed, velocity_embed])
+
+        # Modification for time embeddings
+        if use_time_embed:
+            timesteps = 250
+            temp = []
+            for i in range(timesteps):
+                x = inputs
+                x = tf.concat([x, tf.one_hot(i, timesteps)], axis = 0)
+                temp.append(inputs)
+            inputs = tf.stack(temp, axis = -1)
+            shape = tf.shape(inputs)
+            inputs = tf.reshape(inputs, [250, 1262])
+
+        lstm_1 = tf.keras.layers.LSTM(units = 1024, return_sequences = True)(inputs)
         lstm_2 = tf.keras.layers.LSTM(units = 1024, return_sequences = True)(lstm_1)
         lstm_3 = tf.keras.layers.LSTM(units = 1024, return_sequences = True)(lstm_2)
         output = tf.keras.layers.Dense(128)(lstm_3)
-        model = tf.keras.models.Model(inputs = x, outputs = output)
+        model = tf.keras.models.Model(inputs = [instrument, pitch, velocity], outputs = output)
         return model
 
 #   def parse_input_for_encoder(self, inputs):

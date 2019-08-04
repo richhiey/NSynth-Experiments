@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 # Prepare NSynth TFRecordDataset to pass to model
-def prepare_nsynth_dataset(dataset, time_embeddings = True):
+def prepare_nsynth_dataset(dataset, batch_size = 64, time_embeddings = True):
     def process_parsed_features(point):
         instr_dim_size = 1006
         instr_embedding_size = 16
@@ -16,26 +16,22 @@ def prepare_nsynth_dataset(dataset, time_embeddings = True):
         velocity = tf.one_hot(point['velocity'], vel_dim_size)
 
         audio = point['audio']
-
-        time_dim_size = 250
-        time_embedding_size = 4
-
-        original_input_size = instr_dim_size + pitch_dim_size + vel_dim_size + time_dim_size
-        embedding_input_size = instr_embedding_size + pitch_embedding_size + vel_embedding_size + time_embedding_size
-
-        inputs = tf.concat([instrument, pitch, velocity], axis = 0)
-        # Modification for time embeddings
-        if time_embeddings:
-            timesteps = 250
-            temp = []
-            for i in range(timesteps):
-                x = inputs
-                x = tf.concat([x, tf.one_hot(i, timesteps)], axis = 0)
-                temp.append(inputs)
-            inputs = tf.stack(temp, axis = -1)
-            shape = tf.shape(inputs)
-            inputs = tf.reshape(inputs, [250, 1262])
-        return {'inputs': inputs, 'outputs': audio}
+        
+        input_dict = {}
+        input_dict['note'] = point['note']
+        input_dict['note_str'] = point['note_str']
+        input_dict['instrument'] = point['instrument']
+        input_dict['instrument_str'] = point['instrument_str']
+        input_dict['instrument_feature'] = instrument
+        input_dict['pitch'] = point['pitch']
+        input_dict['pitch_feature'] = pitch
+        input_dict['velocity'] = point['velocity']
+        input_dict['velocity_feature'] = velocity
+        input_dict['instrument_family'] = point['instrument_family']
+        input_dict['instrument_family_str'] = point['instrument_family_str']
+        input_dict['instrument_source'] = point['instrument_source']
+        input_dict['instrument_source_str'] = point['instrument_source_str']
+        return {'inputs': input_dict, 'outputs': audio}
 
     def parse_nsynth(example_proto):
         features = {
@@ -46,6 +42,7 @@ def prepare_nsynth_dataset(dataset, time_embeddings = True):
             "instrument_str": tf.io.FixedLenFeature((), dtype = tf.string),
             "instrument_source": tf.io.FixedLenFeature((), dtype = tf.int64),
             "instrument_source_str": tf.io.FixedLenFeature((), dtype = tf.string),
+            "instrument_family": tf.io.FixedLenFeature((), dtype = tf.int64),
             "instrument_family_str": tf.io.FixedLenFeature((), dtype = tf.string),
             "sample_rate": tf.io.FixedLenFeature((), dtype = tf.int64),
             "velocity": tf.io.FixedLenFeature((), dtype = tf.int64),
@@ -60,4 +57,4 @@ def prepare_nsynth_dataset(dataset, time_embeddings = True):
         #data = data.prefetch(1)
         return data
 
-    return tfr_dataset_eager(dataset, 64)
+    return tfr_dataset_eager(dataset, batch_size)
