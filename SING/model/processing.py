@@ -1,7 +1,13 @@
 import os
 import tensorflow as tf
+import numpy as np
+import librosa
 import IPython
-from matplotlib import pyplot as plt
+import matplotlib
+import datasets as dataset_utils
+import librosa
+import librosa.display
+import matplotlib.pyplot as plt
 
 def get_tensorflow_checkpoint(ckpt, optimizer, model_checkpoint_dir, max_to_keep = 3):
     manager = tf.train.CheckpointManager(
@@ -29,19 +35,33 @@ def get_all_trainable_variables(trainable_sub_models = []):
             trainable_variables.append(var)
     return trainable_variables
 
-def log_training_audio_to_notebook(real_wav, generated_wav, num_outputs = 1, audio_sampling_rate = 16000):
+def log_training_audio_to_notebook(data, generated_wav, num_outputs = 1, audio_sampling_rate = 16000):
     print('------------- Generating audio ---------------')
     print('Original audio waveforms - ')
+    real_wav = data['outputs']
+    note_str = data['inputs']['note_str'].numpy()
+    instr = data['inputs']['instrument_str'].numpy()
+    instr_family = data['inputs']['instrument_family_str'].numpy()
+    instr_src = data['inputs']['instrument_source_str'].numpy()
     for j in range(num_outputs):
+        print('Instrument - ' + str(instr[j]))
+        print('Instrument Family - ' + str(instr_family[j]))
+        print('Instrument Source - ' + str(instr_src[j]))
+        print('Note - ' + str(note_str[j]))
+        spec = get_spectrogram_for_audio(real_wav[j,:])
+        plot_spectrogram(spec)
         IPython.display.display(
             IPython.display.Audio(
                 real_wav[j,:],
                 rate = audio_sampling_rate
             )
         )
+        
 
     print('Generated audio waveforms -')
     for j in range(num_outputs):
+        spec = get_spectrogram_for_audio(generated_wav[j,:])
+        plot_spectrogram(spec)
         IPython.display.display(
             IPython.display.Audio(
                 generated_wav[j,:],
@@ -50,10 +70,10 @@ def log_training_audio_to_notebook(real_wav, generated_wav, num_outputs = 1, aud
         )
     print('--------------- Generated audio! ---------------')
 
-def get_spectrogram_for_audio(audio, log_scale, sampling_rate = 16000):
-    spec = librosa.feature.melspectrogram(tf.squeeze(audio, axis = 0).numpy(), sr = sampling_rate, n_mels = 128)
+def get_spectrogram_for_audio(audio, log_scale = True, sampling_rate = 16000):
+    spec = librosa.feature.melspectrogram(audio.numpy(), sr = sampling_rate, n_mels = 128)
     if log_scale:
-        spec = librosa.amplitude_to_db(S, np.max)
+        spec = librosa.amplitude_to_db(spec, np.max)
     return spec
 
 def plot_spectrogram(spec, sampling_rate = 16000):

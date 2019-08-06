@@ -26,41 +26,36 @@ class SequenceEncoder(tf.keras.Model):
         self.sequence_generator = self.build_encoder()
 
     def build_encoder(self, use_embed = True, use_time_embed = True):
-        instrument = tf.keras.Input(())
-        pitch = tf.keras.Input(())
-        velocity = tf.keras.Input(())
-        
-        if use_embed:
-            instrument_embed = tf.keras.layers.Embedding(1006, 128)(instrument)
-            pitch_embed = tf.keras.layers.Embedding(128, 16)(pitch)
-            velocity_embed = tf.keras.layers.Embedding(128, 2)(velocity)
+        instrument = tf.keras.Input(shape=(None, ), name = 'instrument')
+        pitch = tf.keras.Input(shape=(None, ), name = 'pitch')
+        velocity = tf.keras.Input(shape=(None, ), name = 'velocity')
+        time = tf.keras.Input(shape=(None, ), name = 'time')
 
-        inputs = tf.keras.layers.concatenate([pitch_embed, instrument_embed, velocity_embed])
+        instrument_embed = tf.keras.layers.Embedding(1006, 16)(instrument)
+        pitch_embed = tf.keras.layers.Embedding(128, 8)(pitch)
+        velocity_embed = tf.keras.layers.Embedding(128, 2)(velocity)
+        time_embed = tf.keras.layers.Embedding(250, 4)(time)
 
-        # Modification for time embeddings
-        if use_time_embed:
-            timesteps = 250
-            temp = []
-            for i in range(timesteps):
-                x = inputs
-                x = tf.concat([x, tf.one_hot(i, timesteps)], axis = 0)
-                temp.append(inputs)
-            inputs = tf.stack(temp, axis = -1)
-            shape = tf.shape(inputs)
-            inputs = tf.reshape(inputs, [250, 1262])
+        inputs = tf.keras.layers.concatenate([instrument_embed, pitch_embed, velocity_embed, time_embed])
 
         lstm_1 = tf.keras.layers.LSTM(units = 1024, return_sequences = True)(inputs)
         lstm_2 = tf.keras.layers.LSTM(units = 1024, return_sequences = True)(lstm_1)
         lstm_3 = tf.keras.layers.LSTM(units = 1024, return_sequences = True)(lstm_2)
         output = tf.keras.layers.Dense(128)(lstm_3)
-        model = tf.keras.models.Model(inputs = [instrument, pitch, velocity], outputs = output)
+        model = tf.keras.models.Model(inputs = [instrument, pitch, velocity, time], outputs = output)
         return model
 
-#   def parse_input_for_encoder(self, inputs):
-#       instrument = inputs['instrument']
-#       velocity = inputs['velocity']
-#       pitch = inputs['pitch']
-#       time_embed = tf.constant(
-
-    def call(self, input):
-        return self.sequence_generator(input)
+    def call(self, instr, pitch, velocity, timesteps):
+        instrument = tf.stack([instr] * timesteps, axis = 1)
+        pitch = tf.stack([pitch] * timesteps, axis = 1)
+        velocity = tf.stack([velocity] * timesteps, axis = 1)
+        
+        def get_time_stuff(timesteps):
+            temp = []
+            for i in range(timesteps):
+                x = tf.constant(i + 1)
+                temp.append(x)
+            return tf.squeeze(tf.stack([tf.expand_dims(tf.stack(temp, axis = -1), axis = 0)] * 64, axis = 0))
+        
+        time = get_time_stuff(timesteps) 
+        return self.sequence_generator([instrument, pitch, velocity, time])
