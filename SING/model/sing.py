@@ -21,13 +21,19 @@ class SINGModel(tf.keras.Model):
 
         # Extra variables
         self.learning_rate = 0.0003
-        self.num_epochs = 5
+        self.num_epochs = 50
         self.model_log_dir = model_log_dir
         self.optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
         self.num_steps_checkpoint = 1000
         self.num_outputs = 3
         self.sampling_rate = 16000
-        self.max_steps = 20000
+        # This means that training starts at step 0
+        # Autoencoder is trained till step 100000 (dataset_size * num_epochs)
+        # LSTM is trained till 200000
+        # LSTM is trained with conv_decoder till 300000
+        self.max_steps_ae = 220000
+        self.max_steps_lstm = 260000
+        self.max_steps_final = 300000
 
     def call(self, inputs):
         return self.conv_decoder(self.sequence_generator(inputs))
@@ -122,7 +128,7 @@ class SINGModel(tf.keras.Model):
                 print('-------------------- EPOCH ' + str(i) + ' ------------------------')
                 for data in dataset:
                     step = int(ckpt.step)
-                    if step > self.max_steps:
+                    if step > self.max_steps_ae:
                         break
                     output_wav, loss, grads = pretrain_step_conv_autoencoder(
                         tf.expand_dims(data['outputs'], axis = -1)
@@ -163,7 +169,7 @@ class SINGModel(tf.keras.Model):
                 print('-------------------- EPOCH ' + str(i) + ' ------------------------')
                 for data in dataset:
                     step = int(ckpt.step)
-                    if step > self.max_steps:
+                    if step > self.max_steps_lstm:
                         break
                     output_wav, loss, grads = pretrain_sequence_generator(data)
                     log_stuff_to_tensorboard(
@@ -196,7 +202,7 @@ class SINGModel(tf.keras.Model):
                 print('-------------------- EPOCH ' + str(i) + ' ------------------------')
                 for data in dataset:
                     step = int(ckpt.step)
-                    if step > self.max_steps:
+                    if step > self.max_steps_final:
                         break
                     output_wav, loss, grads = train_step_sing(data)
                     log_stuff_to_tensorboard(

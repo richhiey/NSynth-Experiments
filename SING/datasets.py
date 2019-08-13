@@ -37,7 +37,7 @@ def prepare_nsynth_dataset(dataset, batch_size = 64, use_time_embed = True):
     def tfr_dataset_eager(data, batch_size):
         data = data.apply(tf.data.experimental.shuffle_and_repeat(10000))
         data = data.apply(tf.data.experimental.map_and_batch(map_func = parse_nsynth, batch_size = batch_size))
-        #data = data.prefetch(1)
+        data = data.prefetch(1)
         return data
 
     return tfr_dataset_eager(dataset, batch_size)

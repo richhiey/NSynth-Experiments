@@ -31,10 +31,10 @@ class SequenceEncoder(tf.keras.Model):
         velocity = tf.keras.Input(shape=(None, ), name = 'velocity')
         time = tf.keras.Input(shape=(None, ), name = 'time')
 
-        instrument_embed = tf.keras.layers.Embedding(1006, 16)(instrument)
-        pitch_embed = tf.keras.layers.Embedding(128, 8)(pitch)
-        velocity_embed = tf.keras.layers.Embedding(128, 2)(velocity)
-        time_embed = tf.keras.layers.Embedding(250, 4)(time)
+        instrument_embed = tf.keras.layers.Embedding(self.instr_dim_size, self.instr_embedding_size)(instrument)
+        pitch_embed = tf.keras.layers.Embedding(self.pitch_dim_size, self.pitch_embedding_size)(pitch)
+        velocity_embed = tf.keras.layers.Embedding(self.vel_dim_size, self.vel_embedding_size)(velocity)
+        time_embed = tf.keras.layers.Embedding(self.time_dim_size, self.time_embedding_size)(time)
 
         inputs = tf.keras.layers.concatenate([instrument_embed, pitch_embed, velocity_embed, time_embed])
 
