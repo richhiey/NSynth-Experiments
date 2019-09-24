@@ -45,17 +45,13 @@ class SequenceEncoder(tf.keras.Model):
         model = tf.keras.models.Model(inputs = [instrument, pitch, velocity, time], outputs = output)
         return model
 
-    def call(self, instr, pitch, velocity, timesteps):
+    def call(self, instr, pitch, velocity, timesteps, batch_size = 64):
         instrument = tf.stack([instr] * timesteps, axis = 1)
         pitch = tf.stack([pitch] * timesteps, axis = 1)
         velocity = tf.stack([velocity] * timesteps, axis = 1)
         
         def get_time_stuff(timesteps):
-            temp = []
-            for i in range(timesteps):
-                x = tf.constant(i + 1)
-                temp.append(x)
-            return tf.squeeze(tf.stack([tf.expand_dims(tf.stack(temp, axis = -1), axis = 0)] * 64, axis = 0))
-        
-        time = get_time_stuff(timesteps) 
+            return tf.squeeze(tf.stack([tf.expand_dims(tf.range(1, timesteps + 1, 1), axis = 0)] * batch_size, axis = 0))
+
+        time = get_time_stuff(timesteps)
         return self.sequence_generator([instrument, pitch, velocity, time])

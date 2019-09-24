@@ -12,28 +12,19 @@ class SINGModel(tf.keras.Model):
         super(SINGModel, self).__init__(name = "SINGModel")
         # Model variables
         self.conv_encoder = ConvolutionalEncoder()
-        self.conv_encoder.build(input_shape=(10,64000,1))
-        print(self.conv_encoder.summary())
         self.conv_decoder = ConvolutionalDecoder()
-        self.conv_decoder.build(input_shape=(10,250,128))
-        print(self.conv_decoder.summary())
         self.sequence_generator = SequenceEncoder()
 
         # Extra variables
-        self.learning_rate = 0.0003
-        self.num_epochs = 50
+        self.learning_rate = 0.0002
+        self.num_epochs = 20
         self.model_log_dir = model_log_dir
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
+        self.conv_ae_optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
+        self.lstm_optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
+        self.fine_tuning_optimizer = tf.keras.optimizers.Adam(learning_rate = self.learning_rate)
         self.num_steps_checkpoint = 1000
         self.num_outputs = 3
         self.sampling_rate = 16000
-        # This means that training starts at step 0
-        # Autoencoder is trained till step 100000 (dataset_size * num_epochs)
-        # LSTM is trained till 200000
-        # LSTM is trained with conv_decoder till 300000
-        self.max_steps_ae = 220000
-        self.max_steps_lstm = 260000
-        self.max_steps_final = 300000
 
     def call(self, inputs):
         return self.conv_decoder(self.sequence_generator(inputs))
@@ -65,7 +56,7 @@ class SINGModel(tf.keras.Model):
             trainable_variables = self.sequence_generator.trainable_variables
             grads = tape.gradient(loss, trainable_variables)
             grads_and_vars = zip(grads, trainable_variables)
-            self.optimizer.apply_gradients(grads_and_vars)
+            self.lstm_optimizer.apply_gradients(grads_and_vars)
             return encoding, loss, grads
             
         def pretrain_step_conv_autoencoder(waveform, loss_type = 'MSE'):        
@@ -81,7 +72,7 @@ class SINGModel(tf.keras.Model):
             trainable_variables = get_all_trainable_variables(trainable_sub_models)
             grads = tape.gradient(loss, trainable_variables)
             grads_and_vars = zip(grads, trainable_variables)
-            self.optimizer.apply_gradients(grads_and_vars)
+            self.conv_ae_optimizer.apply_gradients(grads_and_vars)
             return decoding, loss, grads
 
         def train_step_sing(data, loss_type = 'MSE'):
@@ -96,7 +87,7 @@ class SINGModel(tf.keras.Model):
                 trainable_variables = get_all_trainable_variables(trainable_sub_models)
                 grads = tape.gradient(loss, trainable_variables)
                 grads_and_vars = zip(grads, trainable_variables)
-            self.optimizer.apply_gradients(grads_and_vars)
+            self.fine_tuning_optimizer.apply_gradients(grads_and_vars)
             return decoding, loss, grads
 
         run_full_pipeline = train_phase == 'full_pipeline'
@@ -117,10 +108,10 @@ class SINGModel(tf.keras.Model):
 
         # Pre-Training Conv Autoencoder
         if run_autoenc_pretrain:
-            ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.optimizer, net = self)
+            ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.conv_ae_optimizer, net = self)
             manager = get_tensorflow_checkpoint(
                 ckpt,
-                self.optimizer,
+                self.conv_ae_optimizer,
                 self.model_log_dir
             )
             print('Initializing pretraining of Convolutional Autoencoder ...')
@@ -128,8 +119,6 @@ class SINGModel(tf.keras.Model):
                 print('-------------------- EPOCH ' + str(i) + ' ------------------------')
                 for data in dataset:
                     step = int(ckpt.step)
-                    if step > self.max_steps_ae:
-                        break
                     output_wav, loss, grads = pretrain_step_conv_autoencoder(
                         tf.expand_dims(data['outputs'], axis = -1)
                     )
@@ -158,10 +147,10 @@ class SINGModel(tf.keras.Model):
 
         # Pre-Training LSTM Sequence Generator
         if run_lstm_pretrain:    
-            ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.optimizer, net = self)
+            ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.lstm_optimizer, net = self)
             manager = get_tensorflow_checkpoint(
                 ckpt,
-                self.optimizer,
+                self.lstm_optimizer,
                 self.model_log_dir
             )
             print('Initializing pretraining of LSTM Sequence Generator ...')
@@ -169,8 +158,6 @@ class SINGModel(tf.keras.Model):
                 print('-------------------- EPOCH ' + str(i) + ' ------------------------')
                 for data in dataset:
                     step = int(ckpt.step)
-                    if step > self.max_steps_lstm:
-                        break
                     output_wav, loss, grads = pretrain_sequence_generator(data)
                     log_stuff_to_tensorboard(
                         step,
@@ -192,18 +179,16 @@ class SINGModel(tf.keras.Model):
         # Final training of entire model
         if run_fine_tuning:
             print('Initializing training of SING Model with LSTM sequence generator ...')
-            ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.optimizer, net = self)
+            ckpt = tf.train.Checkpoint(step = tf.Variable(1), optimizer = self.fine_tuning_optimizer, net = self)
             manager = get_tensorflow_checkpoint(
                 ckpt,
-                self.optimizer,
+                self.fine_tuning_optimizer,
                 self.model_log_dir
             )
             for i in range(self.num_epochs):
                 print('-------------------- EPOCH ' + str(i) + ' ------------------------')
                 for data in dataset:
                     step = int(ckpt.step)
-                    if step > self.max_steps_final:
-                        break
                     output_wav, loss, grads = train_step_sing(data)
                     log_stuff_to_tensorboard(
                         step,
